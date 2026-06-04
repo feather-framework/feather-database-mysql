@@ -60,9 +60,10 @@ struct FeatherDatabaseMySQLTestSuite {
 
         let host = environment["MYSQL_HOST"] ?? "127.0.0.1"
         let port = environment["MYSQL_PORT"].flatMap(Int.init) ?? 3306
-        let username = environment["MYSQL_USER"] ?? "mariadb"
         let password = environment["MYSQL_PASSWORD"] ?? "mariadb"
+        let rootPassword = environment["MYSQL_ROOT_PASSWORD"] ?? password
         let databaseName = environment["MYSQL_DATABASE"] ?? "mariadb"
+        let testDatabaseName = "test_\(randomTableSuffix())"
 
         var tlsConfig = TLSConfiguration.makeClientConfiguration()
         let rootCert = try NIOSSLCertificate.fromPEMFile(finalCertPath)
@@ -75,9 +76,9 @@ struct FeatherDatabaseMySQLTestSuite {
                     host,
                     port: port
                 ),
-                username: username,
+                username: "root",
                 database: databaseName,
-                password: password,
+                password: rootPassword,
                 tlsConfiguration: tlsConfig,
                 serverHostname: host,
                 logger: logger,
@@ -85,23 +86,55 @@ struct FeatherDatabaseMySQLTestSuite {
             )
             .get()
 
-        let database = DatabaseClientMySQL(
-            connection: connection,
-            logger: logger
-        )
+        var databaseCreated = false
+
+        func cleanup() async {
+            if databaseCreated {
+                _ =
+                    try? await connection.query(
+                        "USE `\(databaseName)`;",
+                        []
+                    )
+                    .get()
+                _ =
+                    try? await connection.query(
+                        "DROP DATABASE IF EXISTS `\(testDatabaseName)`;",
+                        []
+                    )
+                    .get()
+            }
+            _ = try? await connection.close().get()
+            _ = try? await eventLoopGroup.shutdownGracefully()
+        }
 
         do {
+            _ =
+                try await connection.query(
+                    "CREATE DATABASE `\(testDatabaseName)`;",
+                    []
+                )
+                .get()
+            databaseCreated = true
+            _ =
+                try await connection.query(
+                    "USE `\(testDatabaseName)`;",
+                    []
+                )
+                .get()
+
+            let database = DatabaseClientMySQL(
+                connection: connection,
+                logger: logger
+            )
+
             try await closure(database)
+
+            await cleanup()
         }
         catch {
-            try? await connection.close().get()
-            try? await eventLoopGroup.shutdownGracefully()
+            await cleanup()
             Issue.record(error)
-            return
         }
-
-        try? await connection.close().get()
-        try? await eventLoopGroup.shutdownGracefully()
     }
 
     // MARK: -
