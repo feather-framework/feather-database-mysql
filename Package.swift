@@ -32,6 +32,7 @@ let package = Package(
         .visionOS(.v2),
     ],
     products: [
+        .library(name: "MySQLNIOExtras", targets: ["MySQLNIOExtras"]),
         .library(name: "FeatherDatabaseMySQL", targets: ["FeatherDatabaseMySQL"]),
     ],
     dependencies: [
@@ -42,11 +43,20 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "MySQLNIOExtras",
+            dependencies: [
+                .product(name: "Logging", package: "swift-log"),
+                .product(name: "MySQLNIO", package: "mysql-nio"),
+            ],
+            swiftSettings: defaultSwiftSettings
+        ),
+        .target(
             name: "FeatherDatabaseMySQL",
             dependencies: [
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "MySQLNIO", package: "mysql-nio"),
                 .product(name: "FeatherDatabase", package: "feather-database"),
+                .target(name: "MySQLNIOExtras"),
             ],
             swiftSettings: defaultSwiftSettings
         ),
@@ -54,6 +64,7 @@ let package = Package(
             name: "FeatherDatabaseMySQLTests",
             dependencies: [
                 .target(name: "FeatherDatabaseMySQL"),
+                .target(name: "MySQLNIOExtras"),
             ],
             swiftSettings: defaultSwiftSettings
         ),

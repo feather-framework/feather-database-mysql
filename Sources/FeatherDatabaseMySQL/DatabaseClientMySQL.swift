@@ -8,6 +8,7 @@
 import FeatherDatabase
 import Logging
 import MySQLNIO
+import MySQLNIOExtras
 
 /// A MySQL-backed database client.
 ///
@@ -16,8 +17,13 @@ public struct DatabaseClientMySQL: DatabaseClient {
 
     public typealias Connection = DatabaseConnectionMySQL
 
-    var connection: DatabaseConnectionMySQL
-    var logger: Logger
+    private enum Storage {
+        case connection(DatabaseConnectionMySQL)
+        case client(MySQLClient)
+    }
+
+    private let storage: Storage
+    private let logger: Logger
 
     /// Create a MySQL database client.
     ///
@@ -29,16 +35,31 @@ public struct DatabaseClientMySQL: DatabaseClient {
         connection: MySQLConnection,
         logger: Logger
     ) {
-        self.connection = .init(
-            connection: connection,
-            logger: logger
+        self.storage = .connection(
+            .init(
+                connection: connection,
+                logger: logger
+            )
         )
+        self.logger = logger
+    }
+
+    /// Create a MySQL database client backed by a connection pool.
+    ///
+    /// - Parameters:
+    ///   - client: The pooled MySQL client to use.
+    ///   - logger: The logger for database operations.
+    public init(
+        client: MySQLClient,
+        logger: Logger
+    ) {
+        self.storage = .client(client)
         self.logger = logger
     }
 
     // MARK: - database api
 
-    /// Execute work using the stored connection.
+    /// Execute work using the stored connection or pooled client.
     ///
     /// The closure is executed with the current connection.
     /// - Parameter closure: A closure that receives the MySQL connection.
@@ -48,14 +69,27 @@ public struct DatabaseClientMySQL: DatabaseClient {
     public func withConnection<T>(
         _ closure: (Connection) async throws -> T
     ) async throws(DatabaseError) -> T {
-        do {
-            return try await closure(connection)
-        }
-        catch let error as DatabaseError {
-            throw error
-        }
-        catch {
-            throw .connection(error)
+        switch storage {
+        case .connection(let connection):
+            return try await withConnection(connection, closure)
+        case .client(let client):
+            do {
+                return try await client.withConnection { connection in
+                    try await withConnection(
+                        DatabaseConnectionMySQL(
+                            connection: connection,
+                            logger: logger
+                        ),
+                        closure
+                    )
+                }
+            }
+            catch let error as DatabaseError {
+                throw error
+            }
+            catch {
+                throw .connection(error)
+            }
         }
     }
 
@@ -69,7 +103,49 @@ public struct DatabaseClientMySQL: DatabaseClient {
     public func withTransaction<T>(
         _ closure: (Connection) async throws -> T
     ) async throws(DatabaseError) -> T {
+        switch storage {
+        case .connection(let connection):
+            return try await withTransaction(connection, closure)
+        case .client(let client):
+            do {
+                return try await client.withConnection { connection in
+                    try await withTransaction(
+                        DatabaseConnectionMySQL(
+                            connection: connection,
+                            logger: logger
+                        ),
+                        closure
+                    )
+                }
+            }
+            catch let error as DatabaseError {
+                throw error
+            }
+            catch {
+                throw .connection(error)
+            }
+        }
+    }
 
+    private func withConnection<T>(
+        _ connection: DatabaseConnectionMySQL,
+        _ closure: (Connection) async throws -> T
+    ) async throws(DatabaseError) -> T {
+        do {
+            return try await closure(connection)
+        }
+        catch let error as DatabaseError {
+            throw error
+        }
+        catch {
+            throw .connection(error)
+        }
+    }
+
+    private func withTransaction<T>(
+        _ connection: DatabaseConnectionMySQL,
+        _ closure: (Connection) async throws -> T
+    ) async throws(DatabaseError) -> T {
         do {
             try await connection.run(query: "START TRANSACTION;") { _ in }
         }
@@ -118,5 +194,4 @@ public struct DatabaseClientMySQL: DatabaseClient {
             throw DatabaseError.transaction(txError)
         }
     }
-
 }

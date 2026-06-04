@@ -8,6 +8,7 @@
 import FeatherDatabase
 import Logging
 import MySQLNIO
+import MySQLNIOExtras
 import NIOCore
 import NIOPosix
 import NIOSSL
@@ -23,7 +24,6 @@ import Foundation
 
 @Suite
 struct FeatherDatabaseMySQLTestSuite {
-
     func randomTableSuffix() -> String {
         let characters = Array("abcdefghijklmnopqrstuvwxyz0123456789")
         var suffix = ""
@@ -37,12 +37,7 @@ struct FeatherDatabaseMySQLTestSuite {
     func runUsingTestDatabaseClient(
         _ closure: ((DatabaseClientMySQL) async throws -> Void)
     ) async throws {
-        var logger = Logger(label: "test")
-        logger.logLevel = .info
-
         let environment = ProcessInfo.processInfo.environment
-
-        let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
 
         let finalCertPath =
             environment["MYSQL_CA_CERT_PATH"]
@@ -64,13 +59,17 @@ struct FeatherDatabaseMySQLTestSuite {
         let rootPassword = environment["MYSQL_ROOT_PASSWORD"] ?? password
         let databaseName = environment["MYSQL_DATABASE"] ?? "mariadb"
         let testDatabaseName = "test_\(randomTableSuffix())"
+        var logger = Logger(label: "test")
+        logger.logLevel = .info
+
+        let rootEventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
 
         var tlsConfig = TLSConfiguration.makeClientConfiguration()
         let rootCert = try NIOSSLCertificate.fromPEMFile(finalCertPath)
         tlsConfig.trustRoots = .certificates(rootCert)
         tlsConfig.certificateVerification = .fullVerification
 
-        let connection =
+        let rootConnection =
             try await MySQLConnection.connect(
                 to: try SocketAddress.makeAddressResolvingHost(
                     host,
@@ -82,51 +81,68 @@ struct FeatherDatabaseMySQLTestSuite {
                 tlsConfiguration: tlsConfig,
                 serverHostname: host,
                 logger: logger,
-                on: eventLoopGroup.next()
+                on: rootEventLoopGroup.next()
             )
             .get()
 
         var databaseCreated = false
+        let client = MySQLClient(
+            configuration: .init(
+                host: host,
+                port: port,
+                username: "root",
+                database: testDatabaseName,
+                password: rootPassword,
+                tlsConfiguration: tlsConfig,
+                serverHostname: host,
+                logger: logger,
+                minimumConnections: 1,
+                maximumConnections: 4,
+                eventLoopThreads: 1
+            )
+        )
 
         func cleanup() async {
+            await client.shutdown()
             if databaseCreated {
                 _ =
-                    try? await connection.query(
+                    try? await rootConnection.query(
                         "USE `\(databaseName)`;",
                         []
                     )
                     .get()
                 _ =
-                    try? await connection.query(
+                    try? await rootConnection.query(
                         "DROP DATABASE IF EXISTS `\(testDatabaseName)`;",
                         []
                     )
                     .get()
             }
-            _ = try? await connection.close().get()
-            _ = try? await eventLoopGroup.shutdownGracefully()
+            _ = try? await rootConnection.close().get()
+            _ = try? await rootEventLoopGroup.shutdownGracefully()
         }
 
         do {
             _ =
-                try await connection.query(
+                try await rootConnection.query(
                     "CREATE DATABASE `\(testDatabaseName)`;",
                     []
                 )
                 .get()
             databaseCreated = true
             _ =
-                try await connection.query(
+                try await rootConnection.query(
                     "USE `\(testDatabaseName)`;",
                     []
                 )
                 .get()
 
             let database = DatabaseClientMySQL(
-                connection: connection,
+                client: client,
                 logger: logger
             )
 
+            try await client.run()
             try await closure(database)
 
             await cleanup()
