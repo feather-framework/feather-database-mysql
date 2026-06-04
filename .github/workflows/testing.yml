@@ -40,24 +40,5 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Generate certificates
-        run: make test-cert
-      - name: Install MySQL client
-        run: sudo apt-get update && sudo apt-get install -y mariadb-client
-      - name: Start MariaDB Docker Container
-        run: docker compose up -d --build
-      - name: Wait For MariaDB Docker Container
-        run: |
-          for i in {1..30}; do
-            if docker compose exec -T mariadb mariadb-admin ping -u mariadb -pmariadb --silent; then
-              exit 0
-            fi
-            sleep 1
-          done
-          docker compose logs mariadb
-          exit 1
-      - name: Run Tests
-        run: swift test --parallel --enable-code-coverage
-      - name: Stop MariaDB Docker Container
-        if: always()
-        run: docker compose down -v
+      - name: Run Docker Tests
+        run: make docker-test

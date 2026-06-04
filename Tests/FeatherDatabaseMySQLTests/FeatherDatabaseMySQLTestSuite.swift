@@ -40,9 +40,15 @@ struct FeatherDatabaseMySQLTestSuite {
         var logger = Logger(label: "test")
         logger.logLevel = .info
 
+        let environment = ProcessInfo.processInfo.environment
+
         let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
 
-        let finalCertPath = URL(fileURLWithPath: #filePath)
+        let finalCertPath =
+            environment["MYSQL_CA_CERT_PATH"]
+            ?? URL(
+                fileURLWithPath: #filePath
+            )
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
@@ -52,40 +58,132 @@ struct FeatherDatabaseMySQLTestSuite {
             .appendingPathComponent("ca.pem")
             .path()
 
+        let host = environment["MYSQL_HOST"] ?? "127.0.0.1"
+        let port = environment["MYSQL_PORT"].flatMap(Int.init) ?? 3306
+        let rootPassword = environment["MYSQL_ROOT_PASSWORD"] ?? "mariadb"
+        let username = environment["MYSQL_USER"] ?? "mariadb"
+        let password = environment["MYSQL_PASSWORD"] ?? "mariadb"
+        let testDatabaseName = "test_\(randomTableSuffix())"
+
         var tlsConfig = TLSConfiguration.makeClientConfiguration()
         let rootCert = try NIOSSLCertificate.fromPEMFile(finalCertPath)
         tlsConfig.trustRoots = .certificates(rootCert)
         tlsConfig.certificateVerification = .fullVerification
 
-        let connection =
+        let rootConnection =
             try await MySQLConnection.connect(
-                to: try SocketAddress(ipAddress: "127.0.0.1", port: 3306),
-                username: "mariadb",
-                database: "mariadb",
-                password: "mariadb",
+                to: try SocketAddress.makeAddressResolvingHost(
+                    host,
+                    port: port
+                ),
+                username: "root",
+                database: "mysql",
+                password: rootPassword,
                 tlsConfiguration: tlsConfig,
+                serverHostname: host,
                 logger: logger,
                 on: eventLoopGroup.next()
             )
             .get()
 
+        var connection: MySQLConnection?
+
+        func cleanup() async {
+            if let connection {
+                do {
+                    try await connection.close().get()
+                }
+                catch {
+                    // Ignore close failures during teardown.
+                }
+            }
+
+            do {
+                _ =
+                    try await rootConnection.query(
+                        "DROP DATABASE `\(testDatabaseName)`;"
+                    )
+                    .get()
+            }
+            catch {
+                // The temporary database may already be gone.
+            }
+
+            do {
+                try await rootConnection.close().get()
+            }
+            catch {
+                // Ignore close failures during teardown.
+            }
+
+            do {
+                try await eventLoopGroup.shutdownGracefully()
+            }
+            catch {
+                // Ignore shutdown failures during teardown.
+            }
+        }
+
+        do {
+            _ =
+                try await rootConnection.query(
+                    "CREATE DATABASE `\(testDatabaseName)`;"
+                )
+                .get()
+
+            _ =
+                try await rootConnection.query(
+                    "GRANT ALL PRIVILEGES ON `\(testDatabaseName)`.* TO '\(username)'@'%';"
+                )
+                .get()
+
+            _ = try await rootConnection.query("FLUSH PRIVILEGES;")
+                .get()
+        }
+        catch {
+            await cleanup()
+            Issue.record(error)
+            return
+        }
+
+        do {
+            connection =
+                try await MySQLConnection.connect(
+                    to: try SocketAddress.makeAddressResolvingHost(
+                        host,
+                        port: port
+                    ),
+                    username: username,
+                    database: testDatabaseName,
+                    password: password,
+                    tlsConfiguration: tlsConfig,
+                    serverHostname: host,
+                    logger: logger,
+                    on: eventLoopGroup.next()
+                )
+                .get()
+        }
+        catch {
+            await cleanup()
+            Issue.record(error)
+            return
+        }
+
         let database = DatabaseClientMySQL(
-            connection: connection,
+            connection: connection!,
             logger: logger
         )
 
         do {
             try await closure(database)
-
-            try await connection.close().get()
-            try await eventLoopGroup.shutdownGracefully()
         }
         catch {
-            try await connection.close().get()
-            try await eventLoopGroup.shutdownGracefully()
-
+            await cleanup()
             Issue.record(error)
+            return
         }
+
+        await cleanup()
     }
 
     // MARK: -
@@ -539,6 +637,342 @@ struct FeatherDatabaseMySQLTestSuite {
                 #expect(result.count == 1)
                 #expect(
                     try result[0].decode(column: "label", as: String.self)
+                        == "alpha"
+                )
+            }
+        }
+    }
+
+    @Test
+    func boundOptionalInterpolationRoundTrip() async throws {
+        try await runUsingTestDatabaseClient { database in
+            try await database.withConnection { connection in
+                let boundString: String? = "alpha"
+                let missingString: String? = nil
+                let boundInt: Int? = 21
+                let missingInt: Int? = nil
+                let boundFloat: Float? = 1.25
+                let missingFloat: Float? = nil
+                let boundDouble: Double? = 3.75
+                let missingDouble: Double? = nil
+                let boundBool: Bool? = true
+                let missingBool: Bool? = nil
+
+                struct OptionalRow: Sendable {
+                    let boundString: String?
+                    let missingString: String?
+                    let boundInt: Int?
+                    let missingInt: Int?
+                    let boundFloat: Double?
+                    let missingFloat: Double?
+                    let boundDouble: Double?
+                    let missingDouble: Double?
+                    let boundBool: Int?
+                    let missingBool: Int?
+
+                    init(_ row: DatabaseRow) throws {
+                        self.boundString = try row.decode(
+                            column: "bound_string",
+                            as: String?.self
+                        )
+                        self.missingString = try row.decode(
+                            column: "missing_string",
+                            as: String?.self
+                        )
+                        self.boundInt = try row.decode(
+                            column: "bound_int",
+                            as: Int?.self
+                        )
+                        self.missingInt = try row.decode(
+                            column: "missing_int",
+                            as: Int?.self
+                        )
+                        self.boundFloat = try row.decode(
+                            column: "bound_float",
+                            as: Double?.self
+                        )
+                        self.missingFloat = try row.decode(
+                            column: "missing_float",
+                            as: Double?.self
+                        )
+                        self.boundDouble = try row.decode(
+                            column: "bound_double",
+                            as: Double?.self
+                        )
+                        self.missingDouble = try row.decode(
+                            column: "missing_double",
+                            as: Double?.self
+                        )
+                        self.boundBool = try row.decode(
+                            column: "bound_bool",
+                            as: Int?.self
+                        )
+                        self.missingBool = try row.decode(
+                            column: "missing_bool",
+                            as: Int?.self
+                        )
+                    }
+                }
+
+                let result = try await connection.run(
+                    query: #"""
+                        SELECT
+                            \#(boundString) AS `bound_string`,
+                            \#(missingString) AS `missing_string`,
+                            \#(boundInt) AS `bound_int`,
+                            \#(missingInt) AS `missing_int`,
+                            \#(boundFloat) AS `bound_float`,
+                            \#(missingFloat) AS `missing_float`,
+                            \#(boundDouble) AS `bound_double`,
+                            \#(missingDouble) AS `missing_double`,
+                            \#(boundBool) AS `bound_bool`,
+                            \#(missingBool) AS `missing_bool`;
+                        """#
+                ) { try await $0.collect().map { try OptionalRow($0) } }
+
+                #expect(result.count == 1)
+                #expect(result[0].boundString == "alpha")
+                #expect(result[0].missingString == nil)
+                #expect(result[0].boundInt == 21)
+                #expect(result[0].missingInt == nil)
+                #expect(result[0].boundFloat == 1.25)
+                #expect(result[0].missingFloat == nil)
+                #expect(result[0].boundDouble == 3.75)
+                #expect(result[0].missingDouble == nil)
+                #expect(result[0].boundBool == 1)
+                #expect(result[0].missingBool == nil)
+            }
+        }
+    }
+
+    @Test
+    func unescapedOptionalInterpolationRoundTrip() async throws {
+        try await runUsingTestDatabaseClient { database in
+            try await database.withConnection { connection in
+                let rawString: String? = "beta"
+                let missingString: String? = nil
+                let rawInt: Int? = 7
+                let missingInt: Int? = nil
+                let rawFloat: Float? = 2.5
+                let missingFloat: Float? = nil
+                let rawDouble: Double? = 4.5
+                let missingDouble: Double? = nil
+                let rawBool: Bool? = false
+                let missingBool: Bool? = nil
+
+                struct RawOptionalRow: Sendable {
+                    let rawString: String?
+                    let missingString: String?
+                    let rawInt: Int?
+                    let missingInt: Int?
+                    let rawFloat: Double?
+                    let missingFloat: Double?
+                    let rawDouble: Double?
+                    let missingDouble: Double?
+                    let rawBool: Int?
+                    let missingBool: Int?
+
+                    init(_ row: DatabaseRow) throws {
+                        self.rawString = try row.decode(
+                            column: "raw_string",
+                            as: String?.self
+                        )
+                        self.missingString = try row.decode(
+                            column: "missing_string",
+                            as: String?.self
+                        )
+                        self.rawInt = try row.decode(
+                            column: "raw_int",
+                            as: Int?.self
+                        )
+                        self.missingInt = try row.decode(
+                            column: "missing_int",
+                            as: Int?.self
+                        )
+                        self.rawFloat = try row.decode(
+                            column: "raw_float",
+                            as: Double?.self
+                        )
+                        self.missingFloat = try row.decode(
+                            column: "missing_float",
+                            as: Double?.self
+                        )
+                        self.rawDouble = try row.decode(
+                            column: "raw_double",
+                            as: Double?.self
+                        )
+                        self.missingDouble = try row.decode(
+                            column: "missing_double",
+                            as: Double?.self
+                        )
+                        self.rawBool = try row.decode(
+                            column: "raw_bool",
+                            as: Int?.self
+                        )
+                        self.missingBool = try row.decode(
+                            column: "missing_bool",
+                            as: Int?.self
+                        )
+                    }
+                }
+
+                let result = try await connection.run(
+                    query: #"""
+                        SELECT
+                            '\#(unescaped: rawString)' AS `raw_string`,
+                            \#(unescaped: missingString) AS `missing_string`,
+                            \#(unescaped: rawInt) AS `raw_int`,
+                            \#(unescaped: missingInt) AS `missing_int`,
+                            \#(unescaped: rawFloat) AS `raw_float`,
+                            \#(unescaped: missingFloat) AS `missing_float`,
+                            \#(unescaped: rawDouble) AS `raw_double`,
+                            \#(unescaped: missingDouble) AS `missing_double`,
+                            \#(unescaped: rawBool) AS `raw_bool`,
+                            \#(unescaped: missingBool) AS `missing_bool`;
+                        """#
+                ) { try await $0.collect().map { try RawOptionalRow($0) } }
+
+                #expect(result.count == 1)
+                #expect(result[0].rawString == "beta")
+                #expect(result[0].missingString == nil)
+                #expect(result[0].rawInt == 7)
+                #expect(result[0].missingInt == nil)
+                #expect(result[0].rawFloat == 2.5)
+                #expect(result[0].missingFloat == nil)
+                #expect(result[0].rawDouble == 4.5)
+                #expect(result[0].missingDouble == nil)
+                #expect(result[0].rawBool == 0)
+                #expect(result[0].missingBool == nil)
+            }
+        }
+    }
+
+    @Test
+    func arrayInterpolationRoundTrip() async throws {
+        try await runUsingTestDatabaseClient { database in
+            let suffix = randomTableSuffix()
+            let table = "array_samples_\(suffix)"
+
+            try await database.withConnection { connection in
+                try await connection.run(
+                    query: #"""
+                        DROP TABLE IF EXISTS `\#(unescaped: table)`;
+                        """#
+                )
+                try await connection.run(
+                    query: #"""
+                        CREATE TABLE `\#(unescaped: table)` (
+                            `id` INTEGER NOT NULL PRIMARY KEY,
+                            `name` TEXT NOT NULL,
+                            `ratio` DOUBLE NOT NULL,
+                            `score` DOUBLE NOT NULL,
+                            `active` BOOLEAN NOT NULL
+                        );
+                        """#
+                )
+
+                try await connection.run(
+                    query: #"""
+                        INSERT INTO `\#(unescaped: table)`
+                            (`id`, `name`, `ratio`, `score`, `active`)
+                        VALUES
+                            (1, 'alpha', 1.5, 3.5, true),
+                            (2, 'beta', 2.25, 4.75, false);
+                        """#
+                )
+
+                let names = ["alpha", "omega"]
+                let ids = [1, 99]
+                let ratios: [Float] = [1.5, 9.5]
+                let scores = [3.5, 9.75]
+                let flags = [true, false]
+
+                let result = try await connection.run(
+                    query: #"""
+                        SELECT
+                            `id`,
+                            `name`
+                        FROM `\#(unescaped: table)`
+                        WHERE
+                            `name` IN (\#(names))
+                            AND `id` IN (\#(ids))
+                            AND `ratio` IN (\#(ratios))
+                            AND `score` IN (\#(scores))
+                            AND `active` IN (\#(flags))
+                        ORDER BY `id`;
+                        """#
+                ) { try await $0.collect() }
+
+                #expect(result.count == 1)
+                #expect(try result[0].decode(column: "id", as: Int.self) == 1)
+                #expect(
+                    try result[0].decode(column: "name", as: String.self)
+                        == "alpha"
+                )
+            }
+        }
+    }
+
+    @Test
+    func optionalArrayInterpolationRoundTrip() async throws {
+        try await runUsingTestDatabaseClient { database in
+            let suffix = randomTableSuffix()
+            let table = "optional_array_samples_\(suffix)"
+
+            try await database.withConnection { connection in
+                try await connection.run(
+                    query: #"""
+                        DROP TABLE IF EXISTS `\#(unescaped: table)`;
+                        """#
+                )
+                try await connection.run(
+                    query: #"""
+                        CREATE TABLE `\#(unescaped: table)` (
+                            `id` INTEGER NOT NULL PRIMARY KEY,
+                            `name` TEXT NOT NULL,
+                            `ratio` DOUBLE NOT NULL,
+                            `score` DOUBLE NOT NULL,
+                            `active` BOOLEAN NOT NULL
+                        );
+                        """#
+                )
+
+                try await connection.run(
+                    query: #"""
+                        INSERT INTO `\#(unescaped: table)`
+                            (`id`, `name`, `ratio`, `score`, `active`)
+                        VALUES
+                            (1, 'alpha', 1.5, 3.5, true),
+                            (2, 'beta', 2.25, 4.75, false);
+                        """#
+                )
+
+                let names: [String?] = ["alpha", nil, "omega"]
+                let ids: [Int?] = [1, nil, 99]
+                let ratios: [Float?] = [1.5, nil, 9.5]
+                let scores: [Double?] = [3.5, nil, 9.75]
+                let flags: [Bool?] = [true, nil, false]
+
+                let result = try await connection.run(
+                    query: #"""
+                        SELECT
+                            `id`,
+                            `name`
+                        FROM `\#(unescaped: table)`
+                        WHERE
+                            `name` IN (\#(names))
+                            AND `id` IN (\#(ids))
+                            AND `ratio` IN (\#(ratios))
+                            AND `score` IN (\#(scores))
+                            AND `active` IN (\#(flags))
+                        ORDER BY `id`;
+                        """#
+                ) { try await $0.collect() }
+
+                #expect(result.count == 1)
+                #expect(try result[0].decode(column: "id", as: Int.self) == 1)
+                #expect(
+                    try result[0].decode(column: "name", as: String.self)
                         == "alpha"
                 )
             }
