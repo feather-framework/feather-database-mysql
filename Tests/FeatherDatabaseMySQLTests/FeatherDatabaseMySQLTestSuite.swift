@@ -48,7 +48,7 @@ struct FeatherDatabaseMySQLTestSuite {
         let password = environment["MYSQL_PASSWORD"] ?? "mariadb"
 
         var tlsConfig = TLSConfiguration.makeClientConfiguration()
-        let rootCert = try! NIOSSLCertificate.fromPEMFile(finalCertPath)
+        let rootCert = loadRootCertificate(at: finalCertPath)
         tlsConfig.trustRoots = .certificates(rootCert)
         tlsConfig.certificateVerification = .fullVerification
 
@@ -68,6 +68,20 @@ struct FeatherDatabaseMySQLTestSuite {
             )
         )
     }()
+
+    static func loadRootCertificate(
+        at path: String
+    ) -> NIOSSLCertificate {
+        do {
+            return try NIOSSLCertificate.fromPEMFile(path)
+        }
+        catch {
+            fatalError(
+                "Failed to load MySQL CA certificate at \(path): \(error)"
+            )
+        }
+    }
+
     func randomTableSuffix() -> String {
         let characters = Array("abcdefghijklmnopqrstuvwxyz0123456789")
         var suffix = ""
