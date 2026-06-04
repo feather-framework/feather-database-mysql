@@ -7,10 +7,7 @@
 
 import FeatherDatabase
 import Logging
-import MySQLNIO
 import MySQLNIOExtras
-import NIOCore
-import NIOPosix
 import NIOSSL
 import Testing
 
@@ -24,21 +21,14 @@ import Foundation
 
 @Suite
 struct FeatherDatabaseMySQLTestSuite {
-    func randomTableSuffix() -> String {
-        let characters = Array("abcdefghijklmnopqrstuvwxyz0123456789")
-        var suffix = ""
-        suffix.reserveCapacity(16)
-        for _ in 0..<16 {
-            suffix.append(characters.randomElement() ?? "a")
-        }
-        return suffix
-    }
+    static let sharedLogger: Logger = {
+        var logger = Logger(label: "test")
+        logger.logLevel = .info
+        return logger
+    }()
 
-    func runUsingTestDatabaseClient(
-        _ closure: ((DatabaseClientMySQL) async throws -> Void)
-    ) async throws {
+    static let sharedPoolClient: MySQLClient = {
         let environment = ProcessInfo.processInfo.environment
-
         let finalCertPath =
             environment["MYSQL_CA_CERT_PATH"]
             ?? URL(
@@ -56,99 +46,53 @@ struct FeatherDatabaseMySQLTestSuite {
         let host = environment["MYSQL_HOST"] ?? "localhost"
         let port = environment["MYSQL_PORT"].flatMap(Int.init) ?? 3306
         let password = environment["MYSQL_PASSWORD"] ?? "mariadb"
-        let rootPassword = environment["MYSQL_ROOT_PASSWORD"] ?? password
-        let databaseName = environment["MYSQL_DATABASE"] ?? "mariadb"
-        let testDatabaseName = "test_\(randomTableSuffix())"
-        var logger = Logger(label: "test")
-        logger.logLevel = .info
-
-        let rootEventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
 
         var tlsConfig = TLSConfiguration.makeClientConfiguration()
-        let rootCert = try NIOSSLCertificate.fromPEMFile(finalCertPath)
+        let rootCert = try! NIOSSLCertificate.fromPEMFile(finalCertPath)
         tlsConfig.trustRoots = .certificates(rootCert)
         tlsConfig.certificateVerification = .fullVerification
 
-        let rootConnection =
-            try await MySQLConnection.connect(
-                to: try SocketAddress.makeAddressResolvingHost(
-                    host,
-                    port: port
-                ),
-                username: "root",
-                database: databaseName,
-                password: rootPassword,
-                tlsConfiguration: tlsConfig,
-                serverHostname: host,
-                logger: logger,
-                on: rootEventLoopGroup.next()
-            )
-            .get()
-
-        var databaseCreated = false
-        let client = MySQLClient(
+        return MySQLClient(
             configuration: .init(
                 host: host,
                 port: port,
                 username: "root",
-                database: testDatabaseName,
-                password: rootPassword,
+                database: environment["MYSQL_DATABASE"] ?? "mariadb",
+                password: password,
                 tlsConfiguration: tlsConfig,
                 serverHostname: host,
-                logger: logger,
-                minimumConnections: 1,
+                logger: sharedLogger,
+                minimumConnections: 0,
                 maximumConnections: 4,
                 eventLoopThreads: 1
             )
         )
-
-        func cleanup() async {
-            await client.shutdown()
-            if databaseCreated {
-                _ =
-                    try? await rootConnection.query(
-                        "USE `\(databaseName)`;",
-                        []
-                    )
-                    .get()
-                _ =
-                    try? await rootConnection.query(
-                        "DROP DATABASE IF EXISTS `\(testDatabaseName)`;",
-                        []
-                    )
-                    .get()
-            }
-            _ = try? await rootConnection.close().get()
-            _ = try? await rootEventLoopGroup.shutdownGracefully()
+    }()
+    func randomTableSuffix() -> String {
+        let characters = Array("abcdefghijklmnopqrstuvwxyz0123456789")
+        var suffix = ""
+        suffix.reserveCapacity(16)
+        for _ in 0..<16 {
+            suffix.append(characters.randomElement() ?? "a")
         }
+        return suffix
+    }
+
+    func runUsingTestDatabaseClient(
+        _ closure: ((DatabaseClientMySQL) async throws -> Void)
+    ) async throws {
+        let logger = Self.sharedLogger
+        let client = Self.sharedPoolClient
 
         do {
-            _ =
-                try await rootConnection.query(
-                    "CREATE DATABASE `\(testDatabaseName)`;",
-                    []
-                )
-                .get()
-            databaseCreated = true
-            _ =
-                try await rootConnection.query(
-                    "USE `\(testDatabaseName)`;",
-                    []
-                )
-                .get()
-
             let database = DatabaseClientMySQL(
                 client: client,
                 logger: logger
             )
 
-            try await client.run()
             try await closure(database)
-
-            await cleanup()
         }
         catch {
-            await cleanup()
             Issue.record(error)
         }
     }
