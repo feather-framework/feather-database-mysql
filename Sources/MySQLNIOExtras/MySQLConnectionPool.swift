@@ -52,14 +52,25 @@ actor MySQLConnectionPool {
             throw MySQLConnectionPoolError.shutdown
         }
 
-        if let connection = availableConnections.popLast() {
-            return connection
+        while let connection = availableConnections.popLast() {
+            if await validateConnection(connection) {
+                return connection
+            }
+
+            totalConnections = max(0, totalConnections - 1)
+            await closeConnection(connection)
         }
 
-        if totalConnections < configuration.maximumConnections {
+        while totalConnections < configuration.maximumConnections {
             totalConnections += 1
             do {
-                return try await makeConnection()
+                let connection = try await makeConnection()
+                if await validateConnection(connection) {
+                    return connection
+                }
+
+                totalConnections = max(0, totalConnections - 1)
+                await closeConnection(connection)
             }
             catch {
                 totalConnections -= 1
@@ -175,6 +186,22 @@ actor MySQLConnectionPool {
             .get()
 
         return connection
+    }
+
+    private func validateConnection(
+        _ connection: MySQLConnection
+    ) async -> Bool {
+        guard !connection.isClosed else {
+            return false
+        }
+
+        do {
+            _ = try await connection.query("SELECT 1;", []).get()
+            return true
+        }
+        catch {
+            return false
+        }
     }
 
     private func closeConnection(
