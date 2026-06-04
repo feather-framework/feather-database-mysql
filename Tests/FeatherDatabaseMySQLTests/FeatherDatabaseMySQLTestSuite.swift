@@ -58,7 +58,7 @@ struct FeatherDatabaseMySQLTestSuite {
             .appendingPathComponent("ca.pem")
             .path()
 
-        let host = environment["MYSQL_HOST"] ?? "127.0.0.1"
+        let host = environment["MYSQL_HOST"] ?? "localhost"
         let port = environment["MYSQL_PORT"].flatMap(Int.init) ?? 3306
         let password = environment["MYSQL_PASSWORD"] ?? "mariadb"
         let rootPassword = environment["MYSQL_ROOT_PASSWORD"] ?? password
