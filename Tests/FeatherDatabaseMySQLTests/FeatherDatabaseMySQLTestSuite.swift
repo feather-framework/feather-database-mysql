@@ -60,25 +60,24 @@ struct FeatherDatabaseMySQLTestSuite {
 
         let host = environment["MYSQL_HOST"] ?? "127.0.0.1"
         let port = environment["MYSQL_PORT"].flatMap(Int.init) ?? 3306
-        let rootPassword = environment["MYSQL_ROOT_PASSWORD"] ?? "mariadb"
         let username = environment["MYSQL_USER"] ?? "mariadb"
         let password = environment["MYSQL_PASSWORD"] ?? "mariadb"
-        let testDatabaseName = "test_\(randomTableSuffix())"
+        let databaseName = environment["MYSQL_DATABASE"] ?? "mariadb"
 
         var tlsConfig = TLSConfiguration.makeClientConfiguration()
         let rootCert = try NIOSSLCertificate.fromPEMFile(finalCertPath)
         tlsConfig.trustRoots = .certificates(rootCert)
         tlsConfig.certificateVerification = .fullVerification
 
-        let rootConnection =
+        let connection =
             try await MySQLConnection.connect(
                 to: try SocketAddress.makeAddressResolvingHost(
                     host,
                     port: port
                 ),
-                username: "root",
-                database: "mysql",
-                password: rootPassword,
+                username: username,
+                database: databaseName,
+                password: password,
                 tlsConfiguration: tlsConfig,
                 serverHostname: host,
                 logger: logger,
@@ -86,91 +85,8 @@ struct FeatherDatabaseMySQLTestSuite {
             )
             .get()
 
-        var connection: MySQLConnection?
-
-        func cleanup() async {
-            if let connection {
-                do {
-                    try await connection.close().get()
-                }
-                catch {
-                    // Ignore close failures during teardown.
-                }
-            }
-
-            do {
-                _ =
-                    try await rootConnection.query(
-                        "DROP DATABASE `\(testDatabaseName)`;"
-                    )
-                    .get()
-            }
-            catch {
-                // The temporary database may already be gone.
-            }
-
-            do {
-                try await rootConnection.close().get()
-            }
-            catch {
-                // Ignore close failures during teardown.
-            }
-
-            do {
-                try await eventLoopGroup.shutdownGracefully()
-            }
-            catch {
-                // Ignore shutdown failures during teardown.
-            }
-        }
-
-        do {
-            _ =
-                try await rootConnection.query(
-                    "CREATE DATABASE `\(testDatabaseName)`;"
-                )
-                .get()
-
-            _ =
-                try await rootConnection.query(
-                    "GRANT ALL PRIVILEGES ON `\(testDatabaseName)`.* TO '\(username)'@'%';"
-                )
-                .get()
-
-            _ = try await rootConnection.query("FLUSH PRIVILEGES;")
-                .get()
-        }
-        catch {
-            await cleanup()
-            Issue.record(error)
-            return
-        }
-
-        do {
-            connection =
-                try await MySQLConnection.connect(
-                    to: try SocketAddress.makeAddressResolvingHost(
-                        host,
-                        port: port
-                    ),
-                    username: username,
-                    database: testDatabaseName,
-                    password: password,
-                    tlsConfiguration: tlsConfig,
-                    serverHostname: host,
-                    logger: logger,
-                    on: eventLoopGroup.next()
-                )
-                .get()
-        }
-        catch {
-            await cleanup()
-            Issue.record(error)
-            return
-        }
-
         let database = DatabaseClientMySQL(
-            connection: connection!,
+            connection: connection,
             logger: logger
         )
 
@@ -178,12 +94,14 @@ struct FeatherDatabaseMySQLTestSuite {
             try await closure(database)
         }
         catch {
-            await cleanup()
+            try? await connection.close().get()
+            try? await eventLoopGroup.shutdownGracefully()
             Issue.record(error)
             return
         }
 
-        await cleanup()
+        try? await connection.close().get()
+        try? await eventLoopGroup.shutdownGracefully()
     }
 
     // MARK: -
