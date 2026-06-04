@@ -3,9 +3,9 @@
 MySQL/MariaDB driver implementation for the abstract [Feather Database](https://github.com/feather-framework/feather-database) Swift API package.
 
 [
-    ![Release: 1.0.0-beta.5](https://img.shields.io/badge/Release-1%2E0%2E0--beta%2E5-F05138)
+    ![Release: 1.0.0-rc.1](https://img.shields.io/badge/Release-1%2E0%2E0--rc%2E1-F05138)
 ](
-    https://github.com/feather-framework/feather-database-mysql/releases/tag/1.0.0-beta.5
+    https://github.com/feather-framework/feather-database-mysql/releases/tag/1.0.0-rc.1
 )
 
 ## Features
@@ -36,7 +36,7 @@ MySQL/MariaDB driver implementation for the abstract [Feather Database](https://
 Add the dependency to your `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/feather-framework/feather-database-mysql", exact: "1.0.0-beta.5"),
+.package(url: "https://github.com/feather-framework/feather-database-mysql", exact: "1.0.0-rc.1"),
 ```
 
 Then add `FeatherDatabaseMySQL` to your target dependencies:
@@ -122,9 +122,6 @@ catch {
 }
 ```
 
-> [!WARNING]  
-> This repository is a work in progress, things can break until it reaches v1.0.0.
-
 ## Other database drivers
 
 The following database client implementations are also available for use:
@@ -144,4 +141,3 @@ The following database client implementations are also available for use:
 ## Contributing
 
 [Pull requests](https://github.com/feather-framework/feather-database-mysql/pulls) are welcome. Please keep changes focused and include tests for new logic. 🙏
-
