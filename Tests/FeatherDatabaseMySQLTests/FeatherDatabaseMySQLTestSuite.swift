@@ -46,10 +46,11 @@ struct FeatherDatabaseMySQLTestSuite {
         let host = environment["MYSQL_HOST"] ?? "localhost"
         let port = environment["MYSQL_PORT"].flatMap(Int.init) ?? 3306
         let password = environment["MYSQL_PASSWORD"] ?? "mariadb"
+        let database = environment["MYSQL_DATABASE"] ?? "mariadb"
 
         var tlsConfig = TLSConfiguration.makeClientConfiguration()
-        let rootCert = loadRootCertificate(at: finalCertPath)
-        tlsConfig.trustRoots = .certificates(rootCert)
+        let rootCertificates = loadRootCertificates(at: finalCertPath)
+        tlsConfig.trustRoots = .certificates(rootCertificates)
         tlsConfig.certificateVerification = .fullVerification
 
         return MySQLClient(
@@ -57,7 +58,7 @@ struct FeatherDatabaseMySQLTestSuite {
                 host: host,
                 port: port,
                 username: "root",
-                database: environment["MYSQL_DATABASE"] ?? "mariadb",
+                database: database,
                 password: password,
                 tlsConfiguration: tlsConfig,
                 serverHostname: host,
@@ -69,9 +70,9 @@ struct FeatherDatabaseMySQLTestSuite {
         )
     }()
 
-    static func loadRootCertificate(
+    static func loadRootCertificates(
         at path: String
-    ) -> NIOSSLCertificate {
+    ) -> [NIOSSLCertificate] {
         do {
             return try NIOSSLCertificate.fromPEMFile(path)
         }
