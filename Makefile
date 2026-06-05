@@ -41,11 +41,11 @@ fix-headers:
 	curl -s $(baseUrl)/check-swift-headers.sh | bash -s -- --fix
 
 
-test-cert:
+test-certs:
 	rm -rf docker/mariadb/certificates && mkdir -p docker/mariadb/certificates && cd docker/mariadb/certificates && ../scripts/generate-certificates.sh
 
 test:
 	swift test --parallel
 
 docker-test:
-	docker build -t feather-database-mysql-tests . -f ./docker/tests/Dockerfile && docker run --rm feather-database-mysql-tests
+	make test-certs && docker compose up --build --abort-on-container-exit --exit-code-from test test

@@ -32,21 +32,38 @@ let package = Package(
         .visionOS(.v2),
     ],
     products: [
+        .library(name: "MySQLNIOExtras", targets: ["MySQLNIOExtras"]),
         .library(name: "FeatherDatabaseMySQL", targets: ["FeatherDatabaseMySQL"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log", from: "1.6.0"),
         .package(url: "https://github.com/vapor/mysql-nio", from: "1.8.0"),
-        .package(url: "https://github.com/feather-framework/feather-database", exact: "1.0.0-beta.5"),
+        .package(url: "https://github.com/feather-framework/feather-database", exact: "1.0.0-rc.1"),
         // [docc-plugin-placeholder]
     ],
     targets: [
+        .target(
+            name: "MySQLNIOExtras",
+            dependencies: [
+                .product(name: "Logging", package: "swift-log"),
+                .product(name: "MySQLNIO", package: "mysql-nio"),
+            ],
+            swiftSettings: defaultSwiftSettings
+        ),
         .target(
             name: "FeatherDatabaseMySQL",
             dependencies: [
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "MySQLNIO", package: "mysql-nio"),
                 .product(name: "FeatherDatabase", package: "feather-database"),
+                .target(name: "MySQLNIOExtras"),
+            ],
+            swiftSettings: defaultSwiftSettings
+        ),
+        .testTarget(
+            name: "MySQLNIOExtrasTests",
+            dependencies: [
+                .target(name: "MySQLNIOExtras"),
             ],
             swiftSettings: defaultSwiftSettings
         ),
