@@ -61,10 +61,16 @@ let package = Package(
             swiftSettings: defaultSwiftSettings
         ),
         .testTarget(
+            name: "MySQLNIOExtrasTests",
+            dependencies: [
+                .target(name: "MySQLNIOExtras"),
+            ],
+            swiftSettings: defaultSwiftSettings
+        ),
+        .testTarget(
             name: "FeatherDatabaseMySQLTests",
             dependencies: [
                 .target(name: "FeatherDatabaseMySQL"),
-                .target(name: "MySQLNIOExtras"),
             ],
             swiftSettings: defaultSwiftSettings
         ),

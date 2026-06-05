@@ -2,7 +2,7 @@
 //  MySQLConnectionPool.swift
 //  feather-database-mysql
 //
-//  Created by Codex on 2026. 06. 04..
+//  Created by Binary Birds on 2026. 06. 04.
 //
 
 import Logging
@@ -105,21 +105,14 @@ actor MySQLConnectionPool {
         if connection.isClosed {
             totalConnections = max(0, totalConnections - 1)
             await closeConnection(connection)
+            await replaceConnectionForWaitingCaller()
+            return
+        }
 
-            guard !waiters.isEmpty else {
-                return
-            }
-
-            let waiter = waiters.removeFirst()
-
-            do {
-                let replacement = try await makeConnection()
-                totalConnections += 1
-                waiter.continuation.resume(returning: replacement)
-            }
-            catch {
-                waiter.continuation.resume(throwing: error)
-            }
+        if await validateConnection(connection) == false {
+            totalConnections = max(0, totalConnections - 1)
+            await closeConnection(connection)
+            await replaceConnectionForWaitingCaller()
             return
         }
 
@@ -201,6 +194,30 @@ actor MySQLConnectionPool {
         }
         catch {
             return false
+        }
+    }
+
+    private func replaceConnectionForWaitingCaller() async {
+        guard !waiters.isEmpty else {
+            return
+        }
+
+        let waiter = waiters.removeFirst()
+
+        do {
+            let replacement = try await makeConnection()
+            if await validateConnection(replacement) {
+                totalConnections += 1
+                waiter.continuation.resume(returning: replacement)
+                return
+            }
+
+            totalConnections = max(0, totalConnections - 1)
+            await closeConnection(replacement)
+            await replaceConnectionForWaitingCaller()
+        }
+        catch {
+            waiter.continuation.resume(throwing: error)
         }
     }
 

@@ -2,12 +2,14 @@
 //  FeatherDatabaseMySQLTestSuite.swift
 //  feather-database-mysql
 //
-//  Created by Tibor Bödecs on 2026. 01. 10..
+//  Created by Tibor Bödecs on 2026. 01. 10.
 //
 
 import FeatherDatabase
 import Logging
+import MySQLNIO
 import MySQLNIOExtras
+import NIOCore
 import NIOSSL
 import Testing
 
