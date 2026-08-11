@@ -58,59 +58,61 @@ import NIOSSL
 import FeatherDatabase
 import FeatherDatabaseMySQL
 
-let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+try await withLogger(Logger(label: "example")) { _ in
+    let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
 
-let finalCertPath = URL(fileURLWithPath: "path/to/ca.pem")
-var tlsConfig = TLSConfiguration.makeClientConfiguration()
-let rootCert = try NIOSSLCertificate.fromPEMFile(finalCertPath)
-tlsConfig.trustRoots = .certificates(rootCert)
-tlsConfig.certificateVerification = .fullVerification
+    let finalCertPath = URL(fileURLWithPath: "path/to/ca.pem")
+    var tlsConfig = TLSConfiguration.makeClientConfiguration()
+    let rootCert = try NIOSSLCertificate.fromPEMFile(finalCertPath)
+    tlsConfig.trustRoots = .certificates(rootCert)
+    tlsConfig.certificateVerification = .fullVerification
 
-let connection =
-    try await MySQLConnection.connect(
-        to: try SocketAddress(ipAddress: "127.0.0.1", port: 3306),
-        username: "mariadb",
-        database: "mariadb",
-        password: "mariadb",
-        tlsConfiguration: tlsConfig,
-        logger: Logger.current,
-        on: eventLoopGroup.next()
-    )
-    .get()
-
-let database = DatabaseClientMySQL(
-    connection: connection
-)
-
-do {
-    let result = try await database.withConnection { connection in
-        try await connection.run(
-            query: #"""
-                SELECT
-                    VERSION() AS `version`
-                WHERE
-                    1=\#(1);
-                """#
+    let connection =
+        try await MySQLConnection.connect(
+            to: try SocketAddress(ipAddress: "127.0.0.1", port: 3306),
+            username: "mariadb",
+            database: "mariadb",
+            password: "mariadb",
+            tlsConfiguration: tlsConfig,
+            logger: Logger.current,
+            on: eventLoopGroup.next()
         )
-    }
-    
-    for try await item in result {
-        let version = try item.decode(column: "version", as: String.self)
-        print(version)
-    }
+        .get()
 
-    try await connection.close().get()
-    try await eventLoopGroup.shutdownGracefully()
-}
-catch {
-    try await connection.close().get()
-    try await eventLoopGroup.shutdownGracefully()
+    let database = DatabaseClientMySQL(
+        connection: connection
+    )
 
-    throw error
+    do {
+        let result = try await database.withConnection { connection in
+            try await connection.run(
+                query: #"""
+                    SELECT
+                        VERSION() AS `version`
+                    WHERE
+                        1=\#(1);
+                    """#
+            )
+        }
+        
+        for try await item in result {
+            let version = try item.decode(column: "version", as: String.self)
+            print(version)
+        }
+
+        try await connection.close().get()
+        try await eventLoopGroup.shutdownGracefully()
+    }
+    catch {
+        try await connection.close().get()
+        try await eventLoopGroup.shutdownGracefully()
+
+        throw error
+    }
 }
 ```
 
-The package uses `Logger.current` from [swift-log](https://github.com/apple/swift-log) for database logging.
+The package uses `Logger.current` from [swift-log](https://github.com/apple/swift-log) for database logging. Use `withLogger` to scope the logger for an operation; calls to `Logger.current` within that scope use the scoped logger.
 
 ## Other database drivers
 
