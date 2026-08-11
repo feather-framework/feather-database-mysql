@@ -23,12 +23,6 @@ import Foundation
 
 @Suite
 struct FeatherDatabaseMySQLTestSuite {
-    static let sharedLogger: Logger = {
-        var logger = Logger(label: "test")
-        logger.logLevel = .info
-        return logger
-    }()
-
     static let sharedPoolClient: MySQLClient = {
         let environment = ProcessInfo.processInfo.environment
         let finalCertPath =
@@ -64,7 +58,6 @@ struct FeatherDatabaseMySQLTestSuite {
                 password: password,
                 tlsConfiguration: tlsConfig,
                 serverHostname: host,
-                logger: sharedLogger,
                 minimumConnections: 0,
                 maximumConnections: 4,
                 eventLoopThreads: 1
@@ -98,19 +91,20 @@ struct FeatherDatabaseMySQLTestSuite {
     func runUsingTestDatabaseClient(
         _ closure: ((DatabaseClientMySQL) async throws -> Void)
     ) async throws {
-        let logger = Self.sharedLogger
         let client = Self.sharedPoolClient
+        let logger = Logger(label: "mysql-test")
 
-        do {
-            let database = DatabaseClientMySQL(
-                client: client,
-                logger: logger
-            )
+        await withLogger(logger) { _ in
+            do {
+                let database = DatabaseClientMySQL(
+                    client: client
+                )
 
-            try await closure(database)
-        }
-        catch {
-            Issue.record(error)
+                try await closure(database)
+            }
+            catch {
+                Issue.record(error)
+            }
         }
     }
 

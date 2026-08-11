@@ -173,7 +173,7 @@ actor MySQLConnectionPool {
                 password: configuration.password,
                 tlsConfiguration: configuration.tlsConfiguration,
                 serverHostname: configuration.serverHostname,
-                logger: configuration.logger,
+                logger: Logger.current,
                 on: eventLoopGroup.next()
             )
             .get()
@@ -228,7 +228,7 @@ actor MySQLConnectionPool {
             try await connection.close().get()
         }
         catch {
-            configuration.logger.warning(
+            Logger.current.warning(
                 "Failed to close MySQL connection",
                 metadata: [
                     "error": "\(error)"
@@ -247,7 +247,7 @@ actor MySQLConnectionPool {
             try await eventLoopGroup.shutdownGracefully()
         }
         catch {
-            configuration.logger.warning(
+            Logger.current.warning(
                 "Failed to shutdown MySQL event loop group",
                 metadata: [
                     "error": "\(error)"

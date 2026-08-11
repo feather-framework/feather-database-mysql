@@ -2,11 +2,7 @@
 
 MySQL/MariaDB driver implementation for the abstract [Feather Database](https://github.com/feather-framework/feather-database) Swift API package.
 
-[
-    ![Release: 1.0.0-rc.1](https://img.shields.io/badge/Release-1%2E0%2E0--rc%2E1-F05138)
-](
-    https://github.com/feather-framework/feather-database-mysql/releases/tag/1.0.0-rc.1
-)
+[![Release: 1.0.0-rc.2](https://img.shields.io/badge/Release-1%2E0%2E0--rc%2E2-F05138)](https://github.com/feather-framework/feather-database-mysql/releases/tag/1.0.0-rc.2)
 
 ## Features
 
@@ -36,7 +32,7 @@ MySQL/MariaDB driver implementation for the abstract [Feather Database](https://
 Add the dependency to your `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/feather-framework/feather-database-mysql", exact: "1.0.0-rc.1"),
+.package(url: "https://github.com/feather-framework/feather-database-mysql", exact: "1.0.0-rc.2"),
 ```
 
 Then add `FeatherDatabaseMySQL` to your target dependencies:
@@ -49,11 +45,7 @@ Then add `FeatherDatabaseMySQL` to your target dependencies:
 
 API documentation is available at the link below:
 
-[
-    ![DocC API documentation](https://img.shields.io/badge/DocC-API_documentation-F05138)
-](
-    https://feather-framework.github.io/feather-database-mysql/
-)
+[![DocC API documentation](https://img.shields.io/badge/DocC-API_documentation-F05138)](https://feather-framework.github.io/feather-database-mysql/)
 
 Here is a brief example:
 
@@ -65,9 +57,6 @@ import NIOPosix
 import NIOSSL
 import FeatherDatabase
 import FeatherDatabaseMySQL
-
-var logger = Logger(label: "example")
-logger.logLevel = .info
 
 let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
 
@@ -84,14 +73,13 @@ let connection =
         database: "mariadb",
         password: "mariadb",
         tlsConfiguration: tlsConfig,
-        logger: logger,
+        logger: Logger.current,
         on: eventLoopGroup.next()
     )
     .get()
 
 let database = DatabaseClientMySQL(
-    connection: connection,
-    logger: logger
+    connection: connection
 )
 
 do {
@@ -122,6 +110,8 @@ catch {
 }
 ```
 
+The package uses `Logger.current` from [swift-log](https://github.com/apple/swift-log) for database logging.
+
 ## Other database drivers
 
 The following database client implementations are also available for use:
@@ -140,4 +130,4 @@ The following database client implementations are also available for use:
 
 ## Contributing
 
-[Pull requests](https://github.com/feather-framework/feather-database-mysql/pulls) are welcome. Please keep changes focused and include tests for new logic. 🙏
+[Pull requests](https://github.com/feather-framework/feather-database-mysql/pulls) are welcome. Please keep changes focused and include tests for new logic.

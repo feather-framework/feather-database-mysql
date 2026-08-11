@@ -50,7 +50,6 @@ public struct DatabaseConnectionMySQL: DatabaseConnection {
     public typealias RowSequence = DatabaseRowSequenceMySQL
 
     let connection: MySQLNIO.MySQLConnection
-    public var logger: Logging.Logger
 
     /// Execute a MySQL query on this connection.
     ///

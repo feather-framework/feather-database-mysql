@@ -6,7 +6,6 @@
 //
 
 import FeatherDatabase
-import Logging
 import MySQLNIO
 import MySQLNIOExtras
 
@@ -23,38 +22,30 @@ public struct DatabaseClientMySQL: DatabaseClient {
     }
 
     private let storage: Storage
-    private let logger: Logger
 
     /// Create a MySQL database client.
     ///
     /// Use this initializer to provide an already-open connection.
-    /// - Parameters:
+    /// - Parameter:
     ///   - connection: The MySQL connection to use.
-    ///   - logger: The logger for database operations.
     public init(
-        connection: MySQLConnection,
-        logger: Logger
+        connection: MySQLConnection
     ) {
         self.storage = .connection(
             .init(
-                connection: connection,
-                logger: logger
+                connection: connection
             )
         )
-        self.logger = logger
     }
 
     /// Create a MySQL database client backed by a connection pool.
     ///
-    /// - Parameters:
+    /// - Parameter:
     ///   - client: The pooled MySQL client to use.
-    ///   - logger: The logger for database operations.
     public init(
-        client: MySQLClient,
-        logger: Logger
+        client: MySQLClient
     ) {
         self.storage = .client(client)
-        self.logger = logger
     }
 
     // MARK: - database api
@@ -77,8 +68,7 @@ public struct DatabaseClientMySQL: DatabaseClient {
                 return try await client.withConnection { connection in
                     try await withConnection(
                         DatabaseConnectionMySQL(
-                            connection: connection,
-                            logger: logger
+                            connection: connection
                         ),
                         closure
                     )
@@ -111,8 +101,7 @@ public struct DatabaseClientMySQL: DatabaseClient {
                 return try await client.withConnection { connection in
                     try await withTransaction(
                         DatabaseConnectionMySQL(
-                            connection: connection,
-                            logger: logger
+                            connection: connection
                         ),
                         closure
                     )

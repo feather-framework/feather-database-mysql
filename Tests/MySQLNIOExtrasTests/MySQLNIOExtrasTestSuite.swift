@@ -67,12 +67,6 @@ struct MySQLNIOExtrasTestSuite {
         }
     }
 
-    static let sharedLogger: Logger = {
-        var logger = Logger(label: "test")
-        logger.logLevel = .info
-        return logger
-    }()
-
     static func loadRootCertificates(at path: String) -> [NIOSSLCertificate] {
         do {
             return try NIOSSLCertificate.fromPEMFile(path)
@@ -121,7 +115,6 @@ struct MySQLNIOExtrasTestSuite {
                 password: password,
                 tlsConfiguration: tlsConfig,
                 serverHostname: host,
-                logger: sharedLogger,
                 minimumConnections: 0,
                 maximumConnections: maximumConnections,
                 eventLoopThreads: 1
@@ -134,15 +127,19 @@ struct MySQLNIOExtrasTestSuite {
         _ closure: (MySQLClient) async throws -> T
     ) async throws -> T {
         let client = Self.makeClient(maximumConnections: maximumConnections)
-        try await client.run()
-        do {
-            let result = try await closure(client)
-            await client.shutdown()
-            return result
-        }
-        catch {
-            await client.shutdown()
-            throw error
+        let logger = Logger(label: "mysql-test")
+
+        return try await withLogger(logger) { _ in
+            try await client.run()
+            do {
+                let result = try await closure(client)
+                await client.shutdown()
+                return result
+            }
+            catch {
+                await client.shutdown()
+                throw error
+            }
         }
     }
 
