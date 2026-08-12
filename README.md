@@ -2,11 +2,7 @@
 
 MySQL/MariaDB driver implementation for the abstract [Feather Database](https://github.com/feather-framework/feather-database) Swift API package.
 
-[
-    ![Release: 1.0.0-rc.1](https://img.shields.io/badge/Release-1%2E0%2E0--rc%2E1-F05138)
-](
-    https://github.com/feather-framework/feather-database-mysql/releases/tag/1.0.0-rc.1
-)
+[![Release: 1.0.0-rc.2](https://img.shields.io/badge/Release-1%2E0%2E0--rc%2E2-F05138)](https://github.com/feather-framework/feather-database-mysql/releases/tag/1.0.0-rc.2)
 
 ## Features
 
@@ -36,7 +32,7 @@ MySQL/MariaDB driver implementation for the abstract [Feather Database](https://
 Add the dependency to your `Package.swift`:
 
 ```swift
-.package(url: "https://github.com/feather-framework/feather-database-mysql", exact: "1.0.0-rc.1"),
+.package(url: "https://github.com/feather-framework/feather-database-mysql", exact: "1.0.0-rc.2"),
 ```
 
 Then add `FeatherDatabaseMySQL` to your target dependencies:
@@ -49,11 +45,7 @@ Then add `FeatherDatabaseMySQL` to your target dependencies:
 
 API documentation is available at the link below:
 
-[
-    ![DocC API documentation](https://img.shields.io/badge/DocC-API_documentation-F05138)
-](
-    https://feather-framework.github.io/feather-database-mysql/
-)
+[![DocC API documentation](https://img.shields.io/badge/DocC-API_documentation-F05138)](https://feather-framework.github.io/feather-database-mysql/)
 
 Here is a brief example:
 
@@ -66,61 +58,61 @@ import NIOSSL
 import FeatherDatabase
 import FeatherDatabaseMySQL
 
-var logger = Logger(label: "example")
-logger.logLevel = .info
+try await withLogger(Logger(label: "example")) { _ in
+    let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
 
-let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+    let finalCertPath = URL(fileURLWithPath: "path/to/ca.pem")
+    var tlsConfig = TLSConfiguration.makeClientConfiguration()
+    let rootCert = try NIOSSLCertificate.fromPEMFile(finalCertPath)
+    tlsConfig.trustRoots = .certificates(rootCert)
+    tlsConfig.certificateVerification = .fullVerification
 
-let finalCertPath = URL(fileURLWithPath: "path/to/ca.pem")
-var tlsConfig = TLSConfiguration.makeClientConfiguration()
-let rootCert = try NIOSSLCertificate.fromPEMFile(finalCertPath)
-tlsConfig.trustRoots = .certificates(rootCert)
-tlsConfig.certificateVerification = .fullVerification
-
-let connection =
-    try await MySQLConnection.connect(
-        to: try SocketAddress(ipAddress: "127.0.0.1", port: 3306),
-        username: "mariadb",
-        database: "mariadb",
-        password: "mariadb",
-        tlsConfiguration: tlsConfig,
-        logger: logger,
-        on: eventLoopGroup.next()
-    )
-    .get()
-
-let database = DatabaseClientMySQL(
-    connection: connection,
-    logger: logger
-)
-
-do {
-    let result = try await database.withConnection { connection in
-        try await connection.run(
-            query: #"""
-                SELECT
-                    VERSION() AS `version`
-                WHERE
-                    1=\#(1);
-                """#
+    let connection =
+        try await MySQLConnection.connect(
+            to: try SocketAddress(ipAddress: "127.0.0.1", port: 3306),
+            username: "mariadb",
+            database: "mariadb",
+            password: "mariadb",
+            tlsConfiguration: tlsConfig,
+            logger: Logger.current,
+            on: eventLoopGroup.next()
         )
-    }
-    
-    for try await item in result {
-        let version = try item.decode(column: "version", as: String.self)
-        print(version)
-    }
+        .get()
 
-    try await connection.close().get()
-    try await eventLoopGroup.shutdownGracefully()
-}
-catch {
-    try await connection.close().get()
-    try await eventLoopGroup.shutdownGracefully()
+    let database = DatabaseClientMySQL(
+        connection: connection
+    )
 
-    throw error
+    do {
+        let result = try await database.withConnection { connection in
+            try await connection.run(
+                query: #"""
+                    SELECT
+                        VERSION() AS `version`
+                    WHERE
+                        1=\#(1);
+                    """#
+            )
+        }
+        
+        for try await item in result {
+            let version = try item.decode(column: "version", as: String.self)
+            print(version)
+        }
+
+        try await connection.close().get()
+        try await eventLoopGroup.shutdownGracefully()
+    }
+    catch {
+        try await connection.close().get()
+        try await eventLoopGroup.shutdownGracefully()
+
+        throw error
+    }
 }
 ```
+
+The package uses `Logger.current` from [swift-log](https://github.com/apple/swift-log) for database logging. Use `withLogger` to scope the logger for an operation; calls to `Logger.current` within that scope use the scoped logger.
 
 ## Other database drivers
 
@@ -140,4 +132,4 @@ The following database client implementations are also available for use:
 
 ## Contributing
 
-[Pull requests](https://github.com/feather-framework/feather-database-mysql/pulls) are welcome. Please keep changes focused and include tests for new logic. 🙏
+[Pull requests](https://github.com/feather-framework/feather-database-mysql/pulls) are welcome. Please keep changes focused and include tests for new logic.

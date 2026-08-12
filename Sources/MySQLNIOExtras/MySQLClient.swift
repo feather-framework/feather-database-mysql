@@ -5,7 +5,6 @@
 //  Created by Binary Birds on 2026. 06. 04.
 //
 
-import Logging
 import MySQLNIO
 import NIOCore
 import NIOPosix
@@ -36,8 +35,6 @@ public final class MySQLClient: Sendable {
         public let minimumConnections: Int
         /// Maximum number of pooled connections to allow.
         public let maximumConnections: Int
-        /// Logger used for pool operations.
-        public let logger: Logger
         /// Number of threads used by the pool's event loop group.
         public let eventLoopThreads: Int
 
@@ -50,7 +47,6 @@ public final class MySQLClient: Sendable {
         ///   - password: The password used when connecting.
         ///   - tlsConfiguration: The TLS configuration to use.
         ///   - serverHostname: The server host name used for TLS verification.
-        ///   - logger: The logger for pool operations.
         ///   - minimumConnections: The minimum number of pooled connections.
         ///   - maximumConnections: The maximum number of pooled connections.
         ///   - eventLoopThreads: The number of event loop threads to use.
@@ -62,7 +58,6 @@ public final class MySQLClient: Sendable {
             password: String? = nil,
             tlsConfiguration: TLSConfiguration? = .makeClientConfiguration(),
             serverHostname: String? = nil,
-            logger: Logger,
             minimumConnections: Int = 1,
             maximumConnections: Int = System.coreCount,
             eventLoopThreads: Int = 1
@@ -82,7 +77,6 @@ public final class MySQLClient: Sendable {
             self.serverHostname = serverHostname
             self.minimumConnections = minimumConnections
             self.maximumConnections = maximumConnections
-            self.logger = logger
             self.eventLoopThreads = eventLoopThreads
         }
     }

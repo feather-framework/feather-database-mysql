@@ -36,9 +36,9 @@ let package = Package(
         .library(name: "FeatherDatabaseMySQL", targets: ["FeatherDatabaseMySQL"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-log", from: "1.6.0"),
+        .package(url: "https://github.com/apple/swift-log", from: "1.14.0"),
         .package(url: "https://github.com/vapor/mysql-nio", from: "1.8.0"),
-        .package(url: "https://github.com/feather-framework/feather-database", exact: "1.0.0-rc.1"),
+        .package(url: "https://github.com/feather-framework/feather-database", exact: "1.0.0-rc.2"),
         // [docc-plugin-placeholder]
     ],
     targets: [
@@ -53,7 +53,6 @@ let package = Package(
         .target(
             name: "FeatherDatabaseMySQL",
             dependencies: [
-                .product(name: "Logging", package: "swift-log"),
                 .product(name: "MySQLNIO", package: "mysql-nio"),
                 .product(name: "FeatherDatabase", package: "feather-database"),
                 .target(name: "MySQLNIOExtras"),
