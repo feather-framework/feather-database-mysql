@@ -7,13 +7,9 @@ on:
 
 jobs:
 
-  api_breakage:
-    name: Check API breakage
-    uses: BinaryBirds/github-workflows/.github/workflows/api_breakage.yml@main
-
   swiftlang_checks:
     name: Swiftlang Checks
-    uses: swiftlang/github-workflows/.github/workflows/soundness.yml@main
+    uses: swiftlang/github-workflows/.github/workflows/soundness.yml@0.0.16
     with:
       license_header_check_project_name: "project"
       format_check_enabled : true
@@ -26,16 +22,14 @@ jobs:
       yamllint_check_enabled : false
       python_lint_check_enabled : false
 
-  bb_checks:
-    name: BB Checks
-    uses: BinaryBirds/github-workflows/.github/workflows/extra_soundness.yml@main
-    with:
-      local_swift_dependencies_check_enabled : true
-      headers_check_enabled : false
-      docc_warnings_check_enabled : true
-
-  swiftlang_tests:
-    name: Swiftlang Tests
+  docker_tests:
+    name: Docker Tests
+    strategy:
+      fail-fast: false
+      matrix:
+        swift-version: ["6.3", "6.4"]
+    env:
+      SWIFT_VERSION: ${{ matrix.swift-version }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

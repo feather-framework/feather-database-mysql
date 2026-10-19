@@ -5,7 +5,7 @@
 //  Created by Tibor Bödecs on 2026. 01. 10.
 //
 
-import FeatherDatabase
+public import FeatherDatabase
 import MySQLNIO
 import NIOCore
 
@@ -31,10 +31,29 @@ extension DatabaseQuery {
                 mysqlBindings.append(.init(bool: value))
             case .int(let value):
                 mysqlBindings.append(.init(int: value))
+            case .int32(let value):
+                mysqlBindings.append(.init(int: Int(value)))
             case .double(let value):
                 mysqlBindings.append(.init(double: value))
+            case .float(let value):
+                mysqlBindings.append(.init(double: Double(value)))
             case .string(let value):
                 mysqlBindings.append(.init(string: value))
+            case .uuid(let value):
+                mysqlBindings.append(.init(uuid: value))
+            case .date(let value):
+                mysqlBindings.append(.init(date: value))
+            case .data(let value):
+                mysqlBindings.append(
+                    .init(
+                        type: .blob,
+                        buffer: ByteBuffer(bytes: value)
+                    )
+                )
+            case .json(let value):
+                mysqlBindings.append(
+                    .init(string: String(decoding: value, as: UTF8.self))
+                )
             }
         }
 

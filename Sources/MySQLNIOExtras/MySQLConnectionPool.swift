@@ -15,7 +15,7 @@ actor MySQLConnectionPool {
 
     private struct Waiter {
         let id: Int
-        let continuation: CheckedContinuation<MySQLConnection, Error>
+        let continuation: CheckedContinuation<MySQLConnection, any Error>
     }
 
     private let configuration: MySQLClient.Configuration

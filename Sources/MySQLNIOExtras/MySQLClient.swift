@@ -5,10 +5,16 @@
 //  Created by Binary Birds on 2026. 06. 04.
 //
 
-import MySQLNIO
+public import MySQLNIO
 import NIOCore
 import NIOPosix
-import NIOSSL
+public import NIOSSL
+
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
+import Foundation
+#endif
 
 /// A MySQL client backed by a lightweight connection pool.
 ///
@@ -59,7 +65,8 @@ public final class MySQLClient: Sendable {
             tlsConfiguration: TLSConfiguration? = .makeClientConfiguration(),
             serverHostname: String? = nil,
             minimumConnections: Int = 1,
-            maximumConnections: Int = System.coreCount,
+            maximumConnections: Int = ProcessInfo.processInfo
+                .activeProcessorCount,
             eventLoopThreads: Int = 1
         ) {
             precondition(port > 0)
