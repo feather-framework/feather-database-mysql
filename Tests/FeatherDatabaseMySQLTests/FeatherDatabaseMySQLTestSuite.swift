@@ -592,7 +592,7 @@ struct FeatherDatabaseMySQLTestSuite {
                     let boundBool: Int?
                     let missingBool: Int?
 
-                    init(_ row: DatabaseRow) throws {
+                    init(_ row: any DatabaseRow) throws {
                         self.boundString = try row.decode(
                             column: "bound_string",
                             as: String?.self
@@ -694,7 +694,7 @@ struct FeatherDatabaseMySQLTestSuite {
                     let rawBool: Int?
                     let missingBool: Int?
 
-                    init(_ row: DatabaseRow) throws {
+                    init(_ row: any DatabaseRow) throws {
                         self.rawString = try row.decode(
                             column: "raw_string",
                             as: String?.self
@@ -1537,7 +1537,7 @@ struct FeatherDatabaseMySQLTestSuite {
             struct Wrapper: Decodable, Sendable {
                 let value: CustomValue
 
-                init(from decoder: Decoder) throws {
+                init(from decoder: any Decoder) throws {
                     let container = try decoder.singleValueContainer()
                     value = try container.decode(CustomValue.self)
                 }
@@ -1586,7 +1586,7 @@ struct FeatherDatabaseMySQLTestSuite {
             }
 
             struct ThrowingValue: Decodable, Sendable {
-                init(from _: Decoder) throws {
+                init(from _: any Decoder) throws {
                     throw TestError.boom
                 }
             }
@@ -1630,7 +1630,7 @@ struct FeatherDatabaseMySQLTestSuite {
     func unkeyedRowDecodingThrowsTypeMismatch() async throws {
         try await runUsingTestDatabaseClient { database in
             struct UnkeyedValue: Decodable, Sendable {
-                init(from decoder: Decoder) throws {
+                init(from decoder: any Decoder) throws {
                     var container = try decoder.unkeyedContainer()
                     _ = try container.decode(String.self)
                 }

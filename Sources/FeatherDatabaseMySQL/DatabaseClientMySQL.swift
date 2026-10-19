@@ -5,9 +5,9 @@
 //  Created by Tibor Bödecs on 2026. 01. 10.
 //
 
-import FeatherDatabase
-import MySQLNIO
-import MySQLNIOExtras
+public import FeatherDatabase
+public import MySQLNIO
+public import MySQLNIOExtras
 
 /// A MySQL-backed database client.
 ///

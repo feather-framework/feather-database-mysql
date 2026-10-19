@@ -26,6 +26,8 @@ services:
         build:
             context: .
             dockerfile: docker/tests/Dockerfile
+            args:
+                SWIFT_VERSION: ${SWIFT_VERSION:-6.3}
         depends_on:
             mariadb:
                 condition: service_healthy
@@ -40,7 +42,7 @@ services:
         volumes:
             - .:/app
         working_dir: /app
-        command: ["swift", "test", "--parallel", "--enable-code-coverage"]
+        command: ["swift", "test", "--build-path", "/tmp/swift-build", "--parallel", "--enable-code-coverage"]
 
 volumes:
     mariadb:

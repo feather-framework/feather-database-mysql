@@ -5,12 +5,33 @@
 //  Created by Tibor Bödecs on 2026. 01. 10.
 //
 
-import FeatherDatabase
+public import FeatherDatabase
 import MySQLNIO
 
 public struct DatabaseRowMySQL: DatabaseRow {
 
     var row: MySQLNIO.MySQLRow
+
+    public var columns: [String] {
+        row.columnDefinitions.map(\.name)
+    }
+
+    public func contains(column: String) -> Bool {
+        row.column(column) != nil
+    }
+
+    public func decodeNil(column: String) throws(DecodingError) -> Bool {
+        guard let data = row.column(column) else {
+            throw .keyNotFound(
+                MySQLColumnKey(stringValue: column),
+                .init(
+                    codingPath: [],
+                    debugDescription: "Missing data for column \(column)."
+                )
+            )
+        }
+        return data.type == .null || data.buffer == nil
+    }
 
     struct SingleValueDecoder: Decoder, SingleValueDecodingContainer {
 
@@ -118,4 +139,11 @@ public struct DatabaseRowMySQL: DatabaseRow {
             )
         }
     }
+}
+
+private struct MySQLColumnKey: CodingKey {
+    let stringValue: String
+    let intValue: Int? = nil
+    init(stringValue: String) { self.stringValue = stringValue }
+    init?(intValue: Int) { return nil }
 }
